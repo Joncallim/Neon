@@ -229,6 +229,7 @@ extension TreeSitterClient {
 #else
 			print("Failed resolve sublayers", error)
 #endif
+			return false
 		}
 
 		return true

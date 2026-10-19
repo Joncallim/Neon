@@ -56,6 +56,9 @@ public final class RangeProcessor {
 	///
 	/// > Warning: Be careful with this value. If there are pending changes (`hasPendingChanges == true`), this value might not refect the current state of the content.
 	public private(set) var processedUpperBound: Int = 0
+	/// The completed prefix plus every queued mutation, in current-content coordinates.
+	/// It moves on enqueue; completion transfers that progress to processedUpperBound.
+	private var scheduledUpperBound: Int = 0
 	private var targetProcessingLocation: Int = -1
 	private var version = 0
 	private var processedVersion = -1
@@ -191,13 +194,23 @@ extension RangeProcessor {
 
 	/// Process content changes.
 	///
-	/// This function will not cause processing to occur unless the change is within the region already processed.
+	/// This function will not cause processing to occur unless the change is within the
+	/// completed or scheduled processing region.
 	public func didChangeContent(in range: NSRange, delta: Int, isolation: isolated (any Actor)) {
-		if processed(range.location) == false {
+		// A pending fill already covers a snapshot of its target range. An edit to that
+		// snapshot must be queued after it, even while processedUpperBound is still 0.
+		let pendingBound = scheduledUpperBound
+		// An insertion at the start can make progress when the scheduled prefix
+		// is zero. This covers an initially empty document and a queued deletion
+		// that erased the processed prefix, including when an unprocessed suffix
+		// remains. The new character is then the first processed character.
+		let emptyContentInsertion = pendingBound == 0 && range.location == 0 &&
+			range.length == 0 && delta > 0 && (hasPendingChanges || contentLength == delta)
+		if pendingBound <= range.location && !emptyContentInsertion {
 			return
 		}
 
-		let limit = processedUpperBound
+		let limit = pendingBound
 
 		precondition(limit >= 0)
 
@@ -212,7 +225,9 @@ extension RangeProcessor {
 		if clampLength == 0 {
 			visibleDelta = delta
 		} else if delta < 0 {
-			visibleDelta = max(delta + clampLength, 0)
+			// A replacement's new content starts at the edit location. Only the
+			// portion before the lazy boundary can change its processed length.
+			visibleDelta = min(delta + clampLength, 0)
 		} else {
 			visibleDelta = 0
 		}
@@ -224,7 +239,8 @@ extension RangeProcessor {
 	
 	/// Process content changes.
 	///
-	/// This function will not cause processing to occur unless the change is within the region already processed.
+	/// This function will not cause processing to occur unless the change is within the
+	/// completed or scheduled processing region.
 	@MainActor
 	@preconcurrency
 	public func didChangeContent(in range: NSRange, delta: Int) {
@@ -232,6 +248,8 @@ extension RangeProcessor {
 	}
 
 	private func processMutation(_ mutation: RangeMutation, in isolation: isolated (any Actor)) {
+		scheduledUpperBound += mutation.delta
+		precondition(scheduledUpperBound >= 0)
 		pendingEventQueue.enqueue(VersionedMutation(mutation, version: version))
 		self.version += 1
 
@@ -256,6 +274,9 @@ extension RangeProcessor {
 		precondition(first.value == mutation, "completed mutation does not match the expected value")
 
 		updateProcessedLocation(by: mutation.delta)
+		if !hasPendingChanges {
+			precondition(scheduledUpperBound == processedUpperBound)
+		}
 
 		scheduleFilling(in: isolation)
 	}
