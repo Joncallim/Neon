@@ -30,8 +30,10 @@ extension RangeInvalidationBuffer {
 		case .idle:
 			preconditionFailure()
 		case let .buffering(set, 1):
-			invalidationHandler(set)
 			self.state = .idle
+			// The handler may invalidate another range or open a new buffering scope.
+			// Publish this batch only after leaving the old scope, so that work is not lost.
+			invalidationHandler(set)
 		case let .buffering(set, count):
 			precondition(count > 1)
 			self.state = .buffering(set, count - 1)
