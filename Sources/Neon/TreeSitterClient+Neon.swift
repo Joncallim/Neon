@@ -31,6 +31,15 @@ extension TreeSitterClient {
 	@MainActor
 	@preconcurrency
 	public func tokenProvider(with provider: @escaping TextProvider, nameMap: [String : String] = [:]) -> TokenProvider {
+		Self.makeTokenProvider(highlightsProvider: highlightsProvider, textProvider: provider, nameMap: nameMap)
+	}
+
+	@MainActor
+	static func makeTokenProvider(
+		highlightsProvider: HighlightsProvider,
+		textProvider provider: @escaping TextProvider,
+		nameMap: [String : String] = [:]
+	) -> TokenProvider {
 		TokenProvider(
 			syncValue: { [highlightsProvider] range in
 				do {
@@ -41,7 +50,11 @@ extension TreeSitterClient {
 
 					return TokenApplication(namedRanges: namedRanges, nameMap: nameMap, range: range)
 				} catch {
-					return .noChange
+					// The background parser can temporarily reject a synchronous
+					// query while another operation is pending. Returning a successful
+					// empty application would mark this range styled without ever
+					// querying it again. Let the validator use its async fallback.
+					return nil
 				}
 			},
 			mainActorAsyncValue: { [highlightsProvider] range in
