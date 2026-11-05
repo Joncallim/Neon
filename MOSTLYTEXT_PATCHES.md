@@ -77,3 +77,13 @@ lock and restores the historical dependency-root lock afterward; the application
 lock remains the tested resolution authority. No application transitive version
 changes. Full corrected-head hosted CI, including unchanged byte-geometry and
 style checks, remains required.
+
+## Complete injection coverage dependency
+
+This manifest-only child pins SwiftTreeSitter7d2dc87e8b9326062d75bc1ef985f17d28e94da9.
+It extends partial injection queries over old as well as fresh capture extents
+and adds a default-true per-language tree-reuse policy. MostlyText explicitly
+disables reuse only for MarkdownInline after a valid UTF-16 scalar edit exposed
+a fresh-tree discrepancy. All Neon runtime/test bytes and original BSD licence
+are identical to baf93c72924e31e16b84adced6ee29cb02934c3b. The application lock
+remains qualification authority; no unrelated dependency is upgraded.
