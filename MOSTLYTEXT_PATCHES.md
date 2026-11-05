@@ -87,3 +87,12 @@ disables reuse only for MarkdownInline after a valid UTF-16 scalar edit exposed
 a fresh-tree discrepancy. All Neon runtime/test bytes and original BSD licence
 are identical to baf93c72924e31e16b84adced6ee29cb02934c3b. The application lock
 remains qualification authority; no unrelated dependency is upgraded.
+
+## Runtime range-lookup transitive pin
+
+This manifest-only child pins SwiftTreeSitter0beea992c4246f93a122de846c8611c9be19aeb7,
+which pins owner tree-sitter5ce80b6f0e29096a5f06826a3ba610c4e89bc255. Every
+Neon runtime/test byte remains identical to be25e35787585430f0f1ac845ed44c11e7f8150a
+and baf93c72924e31e16b84adced6ee29cb02934c3b. Original BSD licence is unchanged;
+the application lock is qualification authority. See the runtime patch manifest
+for behavior-preservation proof and explicit original fresh-tree/Rustdoc failures.
