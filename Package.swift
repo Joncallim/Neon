@@ -15,7 +15,7 @@ let package = Package(
 		.library(name: "Neon", targets: ["Neon"]),
 	],
 	dependencies: [
-		.package(url: "https://github.com/Joncallim/SwiftTreeSitter", revision: "7b914f4f1f91f3ecc60478136786babc6d6555fd"),
+		.package(url: "https://github.com/Joncallim/SwiftTreeSitter", revision: "1b1c85e94df6421a0e4bdcb9f3afaddb16b75d43"),
 		.package(url: "https://github.com/ChimeHQ/Rearrange", from: "2.0.0"),
 	],
 	targets: [
