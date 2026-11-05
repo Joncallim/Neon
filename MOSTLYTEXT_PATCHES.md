@@ -52,3 +52,15 @@ The baseline-only no-op notification shim explicitly models the absent old API;
 it is not native execution. Full application hosted qualification of the actual
 TextViewHighlighter callback order remains required. This does not activate the
 widened background experiment or establish complete-editor performance.
+
+## Partial style-query containment
+
+The first application hosted run exposed a wide italic capture overwriting
+nested styles outside its requested dirty range. Named-range TokenApplication
+initializers now clip each emitted token to the requested range, retaining
+capture order and name mapping and dropping empty intersections. A narrow query
+cannot restyle an unqueried neighbor. Both existing initializer signatures are
+preserved; the generic TokenApplication initializer is unchanged. The actual
+warmed-client/partial-application reproduction fails twice before this correction
+and passes afterward. A separate control covers mapping, ordering, disjoint and
+empty captures. Hosted rerun of the original failing app check is required.
