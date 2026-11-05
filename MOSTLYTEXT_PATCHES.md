@@ -96,3 +96,27 @@ Neon runtime/test byte remains identical to be25e35787585430f0f1ac845ed44c11e7f8
 and baf93c72924e31e16b84adced6ee29cb02934c3b. Original BSD licence is unchanged;
 the application lock is qualification authority. See the runtime patch manifest
 for behavior-preservation proof and explicit original fresh-tree/Rustdoc failures.
+
+## One-phase style-result version ownership
+
+TokenSystemValidator rechecks the request's content version after both async
+provider completion and synchronous provider return, immediately before the
+style interface receives any result. A provider can suspend or reenter editing;
+obsolete results return the existing Validation.stale without touching styles.
+No public API, validation scheduling, buffer, geometry or parser pin changes.
+
+Exact-source Foundation-only controls fail24 assertions before this correction:
+shrunk/grown/same-length changes across a controlled await and synchronous
+reentrant edits, each with apply/replace actions. Unchanged-content application
+and already-obsolete-request skip controls pass before/after. All46 component
+functions plus8 XCTest cases pass Debug/Release after the repair, including
+previous client/style/buffer/range and2,000-scalar-edit regressions. The first
+fixture compiler crashes lowering the generic default sync closure; supplying
+an explicit nil sync closure avoids the compiler defect without changing the
+provider contract, test assertions or compiler/language mode. Both first failure
+and actual24-assertion baseline are retained by the app evidence packet.
+
+Actual hosted Neon/application integration remains required before adoption;
+this narrow return boundary does not establish mounted editor lifecycle, the
+original parser abort, native Release stress or full-editor responsiveness.
+Original BSD text and every preceding owner repair remain unchanged.

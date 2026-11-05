@@ -32,6 +32,10 @@ final class TokenSystemValidator<Interface: TextSystemInterface> {
 			return nil
 		}
 
+		// A provider can suspend or synchronously reenter editing. Its result
+		// retains the request's version, not the current document's authority.
+		guard range.version == currentVersion else { return .stale }
+
 		applyStyles(for: application)
 
 		return .success(range.value)
@@ -42,6 +46,10 @@ final class TokenSystemValidator<Interface: TextSystemInterface> {
 
 		// https://github.com/apple/swift/pull/71143
 		let application = await tokenProvider.async(isolation: MainActor.shared, range.value)
+
+		// A provider can suspend or synchronously reenter editing. Its result
+		// retains the request's version, not the current document's authority.
+		guard range.version == currentVersion else { return .stale }
 
 		applyStyles(for: application)
 
