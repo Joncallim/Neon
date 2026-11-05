@@ -146,9 +146,11 @@ public final class TreeSitterClient {
 	/// - Parameter range: the range that was affected by the edit
 	/// - Parameter delta: the change in length of the content
 	public func didChangeContent(in range: NSRange, delta: Int) {
-		rangeProcessor.didChangeContent(in: range, delta: delta, isolation: MainActor.shared)
+		// Parsing can complete synchronously and publish reentrant callbacks.
+		// Advance validity and the epoch before publishing the edited tree.
 		sublayerValidator.contentChanged(in: range, delta: delta)
 		versionedContent.contentChanged()
+		rangeProcessor.didChangeContent(in: range, delta: delta, isolation: MainActor.shared)
 	}
 
 	/// Inform the client that calls to `languageConfiguration` may change.
@@ -191,7 +193,7 @@ extension TreeSitterClient {
 
 		layerTree.didChangeContent(content, in: mutation.range, delta: mutation.delta, isolation: MainActor.shared, completion: { invalidated in
 			completion()
-			self.handleInvalidation(invalidated, sublayers: false)
+			self.handleInvalidation(invalidated, sublayers: true)
 		})
 	}
 
@@ -202,11 +204,11 @@ extension TreeSitterClient {
 			return
 		}
 
-		configuration.invalidationHandler(transformedSet)
-
 		if sublayers {
 			sublayerValidator.invalidate(.set(transformedSet))
 		}
+
+		configuration.invalidationHandler(transformedSet)
 	}
 }
 
@@ -333,37 +335,52 @@ extension TreeSitterClient {
 		return hasPendingChanges == false
 	}
 
-	private func validateSublayers(in set: IndexSet) {
-		sublayerValidator.validate(.set(set), isolation: MainActor.shared)
+	@discardableResult
+	private func validateSublayers(in set: IndexSet) -> Bool {
+		// Queries may extend beyond EOF, but only existing content can be valid.
+		let target = RangeTarget.set(set.intersection(IndexSet(integersIn: 0..<versionedContent.currentLength)))
+		sublayerValidator.validate(target, isolation: MainActor.shared)
+		return sublayerValidator.isValid(target)
 	}
 
 	private func executeQuery(_ clientQuery: ClientQuery) async throws -> some Sequence<QueryMatch> {
+		let version = versionedContent.currentVersion
 		rangeProcessor.processLocation(clientQuery.params.maxLocation, mode: clientQuery.params.mode, isolation: MainActor.shared)
 
 		await rangeProcessor.processingCompleted(isolation: MainActor.shared)
+		guard version == versionedContent.currentVersion else { throw CancellationError() }
 
-		validateSublayers(in: clientQuery.params.indexSet)
+		while !validateSublayers(in: clientQuery.params.indexSet) {
+			await sublayerValidator.validationCompleted(isolation: MainActor.shared)
+			try Task.checkCancellation()
+			guard version == versionedContent.currentVersion else { throw CancellationError() }
+		}
 
+		try Task.checkCancellation()
+		guard version == versionedContent.currentVersion else { throw CancellationError() }
 		let matches = try await layerTree.executeQuery(clientQuery.query, in: clientQuery.params.indexSet, isolation: MainActor.shared)
+		try Task.checkCancellation()
+		guard version == versionedContent.currentVersion else { throw CancellationError() }
 
 		return matches.resolve(with: .init(textProvider: clientQuery.params.textProvider))
 	}
 
 	public var highlightsProvider: HighlightsProvider {
 		.init(
-			isolation: MainActor.shared,
-			rangeProcessor: rangeProcessor,
-			inputTransformer: { ($0.maxLocation, $0.mode) },
 			syncValue: { input in
 				let set = input.indexSet
+				let version = self.versionedContent.currentVersion
+				guard self.rangeProcessor.processLocation(input.maxLocation, mode: input.mode, isolation: MainActor.shared),
+					version == self.versionedContent.currentVersion else { return nil }
 
 				guard self.canAttemptSynchronousAccess(in: .set(set)) else { return nil }
 
-				self.validateSublayers(in: set)
+				guard self.validateSublayers(in: set),
+					version == self.versionedContent.currentVersion else { return nil }
 
 				return try self.layerTree.executeQuery(.highlights, in: set).highlights()
 			},
-			asyncValue: { input in
+			mainActorAsyncValue: { input in
 				let query = ClientQuery(query: .highlights, indexSet: input.indexSet, textProvider: input.textProvider, mode: input.mode)
 
 				return try await self.executeQuery(query).highlights()

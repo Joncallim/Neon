@@ -26,6 +26,8 @@ public final class SinglePhaseRangeValidator<Content: VersionedContent> {
 
 	private let primaryValidator: RangeValidator<Content>
 	private var eventQueue: AwaitableQueue<ValidationOperation>
+	private var completionWaiters: [CheckedContinuation<Void, Never>] = []
+	private var scheduledValidations = 0
 
 	public let configuration: Configuration
 	public var validationHandler: (NSRange, Bool) -> Void = { _, _ in }
@@ -39,6 +41,10 @@ public final class SinglePhaseRangeValidator<Content: VersionedContent> {
 
 	private var version: Content.Version {
 		configuration.versionedContent.currentVersion
+	}
+
+	package func isValid(_ target: RangeTarget) -> Bool {
+		primaryValidator.isValid(target)
 	}
 
 	/// Manually mark a region as invalid.
@@ -59,6 +65,7 @@ public final class SinglePhaseRangeValidator<Content: VersionedContent> {
 		switch action {
 		case .none:
 			eventQueue.handlePendingWaiters()
+			resumeCompletionWaitersIfIdle()
 			return .none
 		case let .needed(contentRange):
 			let operation = ValidationOperation(contentRange: contentRange, target: target)
@@ -91,10 +98,16 @@ public final class SinglePhaseRangeValidator<Content: VersionedContent> {
 
 	private func completePrimaryValidation(of operation: ValidationOperation, with validation: Validation, isolation: isolated (any Actor)) {
 		primaryValidator.completeValidation(of: operation.contentRange, with: validation)
+		defer { resumeCompletionWaitersIfIdle() }
 
 		switch validation {
 		case .stale:
+			scheduledValidations += 1
 			Task<Void, Never> {
+				defer {
+					scheduledValidations -= 1
+					resumeCompletionWaitersIfIdle()
+				}
 				if operation.contentRange.version == self.version {
 					print("version unchanged after stale results, stopping validation")
 					return
@@ -113,7 +126,12 @@ public final class SinglePhaseRangeValidator<Content: VersionedContent> {
 				return
 			}
 
+			scheduledValidations += 1
 			Task<Void, Never> {
+				defer {
+					scheduledValidations -= 1
+					resumeCompletionWaitersIfIdle()
+				}
 				validate(operation.target, isolation: isolation)
 			}
 		}
@@ -154,7 +172,21 @@ public final class SinglePhaseRangeValidator<Content: VersionedContent> {
 		completePrimaryValidation(of: operation, with: validation, isolation: isolation)
 	}
 
+	private var hasPendingValidation: Bool {
+		primaryValidator.hasOutstandingValidations || scheduledValidations > 0
+	}
+
+	private func resumeCompletionWaitersIfIdle() {
+		guard !hasPendingValidation else { return }
+		let waiters = completionWaiters
+		completionWaiters.removeAll()
+		for waiter in waiters { waiter.resume() }
+	}
+
 	public func validationCompleted(isolation: isolated any Actor) async {
-		await eventQueue.processingCompleted(isolation: isolation)
+		guard hasPendingValidation else { return }
+		// A provider is removed from eventQueue when it starts. It remains
+		// outstanding until its result and any follow-up regions are processed.
+		await withCheckedContinuation { completionWaiters.append($0) }
 	}
 }
