@@ -40,6 +40,19 @@ public struct TokenApplication: Hashable, Sendable {
 		self.action = action
 	}
 
+	/// Keep semantic token identity intact while bounding its paint authority.
+	package func forEachTokenToApply(_ apply: (Token, NSRange) -> Void) {
+		for token in tokens {
+			if let range {
+				let painted = NSIntersectionRange(token.range, range)
+				guard painted.length > 0 else { continue }
+				apply(token, painted)
+			} else {
+				apply(token, token.range)
+			}
+		}
+	}
+
 	public static let noChange = TokenApplication(tokens: [], action: .apply)
 }
 
