@@ -126,9 +126,9 @@ extension LayoutManagerSystemInterface: TextSystemInterface {
 			setAttributes([:], in: range)
 		}
 
-		for token in application.tokens {
+		application.forEachTokenToApply { token, paintedRange in
 			let attrs = attributeProvider(token)
-			setAttributes(attrs, in: token.range)
+			setAttributes(attrs, in: paintedRange)
 		}
 	}
 
@@ -184,9 +184,9 @@ extension TextLayoutManagerSystemInterface: TextSystemInterface {
 			setAttributes([:], in: range)
 		}
 
-		for token in application.tokens {
+		application.forEachTokenToApply { token, paintedRange in
 			let attrs = attributeProvider(token)
-			setAttributes(attrs, in: token.range)
+			setAttributes(attrs, in: paintedRange)
 		}
 	}
 
@@ -245,9 +245,9 @@ extension TextStorageSystemInterface: TextSystemInterface {
 			textStorage.beginEditing()
 		}
 
-		for token in application.tokens {
+		application.forEachTokenToApply { token, paintedRange in
 			let attrs = attributeProvider(token)
-			setAttributes(attrs, in: token.range)
+			setAttributes(attrs, in: paintedRange)
 		}
 
 		textStorage.endEditing()

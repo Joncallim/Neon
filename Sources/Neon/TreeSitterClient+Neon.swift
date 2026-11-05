@@ -7,21 +7,23 @@ import TreeSitterClient
 
 extension TokenApplication {
 	public init(namedRanges: [NamedRange], nameMap: [String : String], range: NSRange) {
-		// A query can return a capture wider than its requested dirty region.
-		// Styling that complete capture would overwrite unqueried nested styles.
-		let tokens = namedRanges.compactMap { named -> Token? in
-			let clipped = NSIntersectionRange(named.range, range)
-			guard clipped.length > 0 else { return nil }
-			let name = nameMap[named.name] ?? named.name
+		let tokens = namedRanges.map {
+			let name = nameMap[$0.name] ?? $0.name
 
-			return Token(name: name, range: clipped)
+			return Token(name: name, range: $0.range)
 		}
 
 		self.init(tokens: tokens, range: range)
 	}
 
 	public init(namedRanges: [NamedRange], range: NSRange) {
-		self.init(namedRanges: namedRanges, nameMap: [:], range: range)
+		let tokens = namedRanges.map {
+			let name = $0.name
+
+			return Token(name: name, range: $0.range)
+		}
+
+		self.init(tokens: tokens, range: range)
 	}
 }
 

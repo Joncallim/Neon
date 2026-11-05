@@ -34,14 +34,27 @@ raise the application fallback, prove complete-editor latency, or establish
 native acceptance. No grammar bytes, styling APIs or upstream contributions are
 changed by this patch.
 
-## Partial style-query containment
+## Partial style-query containment without changing semantic tokens
 
-The first application hosted run exposed a wide italic capture overwriting
-nested styles outside its requested dirty range. Named-range TokenApplication
-initializers now clip each emitted token to the requested range, retaining
-capture order and name mapping and dropping empty intersections. A narrow query
-cannot restyle an unqueried neighbor. Both existing initializer signatures are
-preserved; the generic TokenApplication initializer is unchanged. The actual
-warmed-client/partial-application reproduction fails twice before this correction
-and passes afterward. A separate control covers mapping, ordering, disjoint and
-empty captures. Hosted rerun of the original failing app check is required.
+A partial query may return a capture extending outside its paint authority.
+Keep that complete semantic Token for attribute providers and source geometry.
+The package-only TokenApplication.forEachTokenToApply iterator yields the
+original token plus a separately intersected painting range. All three concrete
+text-system interfaces call the provider with the original token and apply its
+attributes only within the painting range. Public signatures, name mapping,
+clearing behavior and scheduling remain unchanged.
+
+The first hosted run exposed a wide italic capture overwriting unqueried nested
+styles. An initial token-clipping attempt fixed that visual comparison but broke
+the established byte-geometry provider contract in the next hosted run. Both
+failures are retained. Final controls separately require complete semantic token
+ranges and bounded paint ranges, including empty/disjoint/nil authority. The
+actual warmed-client outside-query property remains active: hosted tests use
+the real TextStorageSystemInterface, while the inspected Foundation fixture uses
+the exact iterator with memory styles. No native conditional tail runs locally.
+
+Compile-only standalone qualification temporarily seeds the exact application
+lock and restores the historical dependency-root lock afterward; the application
+lock remains the tested resolution authority. No application transitive version
+changes. Full corrected-head hosted CI, including unchanged byte-geometry and
+style checks, remains required.
