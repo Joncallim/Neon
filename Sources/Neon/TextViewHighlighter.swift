@@ -121,6 +121,9 @@ public final class TextViewHighlighter {
 		storageDelegate.didChangeContent = { [buffer, client, styler] range, delta in
 			let adjustedRange = NSRange(location: range.location, length: range.length - delta)
 
+			// Retained invalidations still refer to the previous source. Shift them
+			// before the client can synchronously publish this edit's new ranges.
+			buffer.contentChanged(in: adjustedRange, delta: delta)
 			client.didChangeContent(in: adjustedRange, delta: delta)
 			styler.didChangeContent(in: adjustedRange, delta: delta)
 

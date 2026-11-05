@@ -29,7 +29,26 @@ existing thousand-insert/query stress test. Original-source regressions and
 failed intermediate/setup controls are retained in the application's evidence
 packet. Full application hosted CI is required for adoption.
 
-This does not fix buffered style-coordinate drift, widen parser thresholds,
-raise the application fallback, prove complete-editor latency, or establish
-native acceptance. No grammar bytes, styling APIs or upstream contributions are
-changed by this patch.
+The client correction alone does not fix buffered style-coordinate drift;
+the next section records that separate repair. Neither correction widens parser
+thresholds, raises the application fallback, proves complete-editor latency or
+establishes native acceptance. Grammar bytes and public styling APIs remain
+unchanged; no upstream contribution is made.
+
+## Buffered repaint coordinates
+
+A package-only edit notification transforms retained dirty intervals before
+TextViewHighlighter asks the client to publish the new edit's invalidations.
+Preserve surviving source before and after deletions, shift the latter, and
+conservatively include replacement text touching a dirty interval. Keep idle,
+all-document, nested-depth and reentrant-flush behavior. Interval sweeps avoid
+per-character work; generic NSRange.apply is not used because a deletion across
+an interval's beginning can otherwise drop its surviving tail.
+
+BufferedCoordinateTests includes an independent per-character oracle over
+75,772 small edit cases, successive-edit/nesting checks, deleted-tail survival,
+all-document and idle states, sparse coordinates and reentrant scope ownership.
+The baseline-only no-op notification shim explicitly models the absent old API;
+it is not native execution. Full application hosted qualification of the actual
+TextViewHighlighter callback order remains required. This does not activate the
+widened background experiment or establish complete-editor performance.

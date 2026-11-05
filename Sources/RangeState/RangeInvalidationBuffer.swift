@@ -40,6 +40,41 @@ extension RangeInvalidationBuffer {
 		}
 	}
 
+	/// Shift retained dirty source through an edit before buffering its new invalidations.
+	/// The range describes the original text replaced by the edit.
+	package func contentChanged(in range: NSRange, delta: Int) {
+		guard case let .buffering(target, count) = state else { return }
+		let existing: IndexSet
+		switch target {
+		case .all:
+			return
+		case let .set(set):
+			existing = set
+		case let .range(dirty):
+			existing = IndexSet(integersIn: dirty.location..<(dirty.location + dirty.length))
+		}
+
+		let oldEnd = range.location + range.length
+		let newEnd = oldEnd + delta
+		precondition(newEnd >= range.location)
+		let edited = range.location..<oldEnd
+		var shifted = IndexSet()
+		for dirty in existing.rangeView {
+			if dirty.lowerBound < range.location {
+				shifted.insert(integersIn: dirty.lowerBound..<min(dirty.upperBound, range.location))
+			}
+			if dirty.upperBound > oldEnd {
+				shifted.insert(integersIn: (max(dirty.lowerBound, oldEnd) + delta)..<(dirty.upperBound + delta))
+			}
+			// Repaint replacement text that touches previously dirty source.
+			// Split around deletions so a surviving tail cannot disappear.
+			if newEnd > range.location && (dirty.overlaps(edited) || (range.length == 0 && dirty.contains(range.location))) {
+				shifted.insert(integersIn: range.location..<newEnd)
+			}
+		}
+		state = .buffering(.set(shifted), count)
+	}
+
 	public func invalidate(_ target: RangeTarget) {
 		switch state {
 		case .idle:
