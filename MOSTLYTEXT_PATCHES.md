@@ -33,3 +33,15 @@ This does not fix buffered style-coordinate drift, widen parser thresholds,
 raise the application fallback, prove complete-editor latency, or establish
 native acceptance. No grammar bytes, styling APIs or upstream contributions are
 changed by this patch.
+
+## Partial style-query containment
+
+The first application hosted run exposed a wide italic capture overwriting
+nested styles outside its requested dirty range. Named-range TokenApplication
+initializers now clip each emitted token to the requested range, retaining
+capture order and name mapping and dropping empty intersections. A narrow query
+cannot restyle an unqueried neighbor. Both existing initializer signatures are
+preserved; the generic TokenApplication initializer is unchanged. The actual
+warmed-client/partial-application reproduction fails twice before this correction
+and passes afterward. A separate control covers mapping, ordering, disjoint and
+empty captures. Hosted rerun of the original failing app check is required.
