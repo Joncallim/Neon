@@ -9,11 +9,14 @@ final class BackgroundProcessor<Value> {
 	
 	private let value: Value
 	private let queue = DispatchQueue(label: "com.chimehq.Neon.BackgroundProcessor")
+	private let beforeQueueSubmission: (@Sendable (Int) async -> Void)?
 	private var pendingCount = 0
 	private var pendingTask: Task<Void, Never>?
+	private var nextRequestID = 0
 
-	public init(value: Value) {
+	public init(value: Value, beforeQueueSubmission: (@Sendable (Int) async -> Void)? = nil) {
 		self.value = value
+		self.beforeQueueSubmission = beforeQueueSubmission
 	}
 
 	public var hasPendingWork: Bool {
@@ -29,7 +32,9 @@ final class BackgroundProcessor<Value> {
 		pendingCount -= 1
 		precondition(pendingCount >= 0)
 		
-		pendingTask = nil
+		if pendingCount == 0 {
+			pendingTask = nil
+		}
 	}
 
 	public func accessValueSynchronously<T>(
@@ -68,11 +73,18 @@ final class BackgroundProcessor<Value> {
 		}
 		
 		beginBackgroundWork()
+		let requestID = nextRequestID
+		nextRequestID += 1
+		let precedingTask = pendingTask
 		
 		nonisolated(unsafe) let unsafeValue = value
 		
-		Task {
+		let task = Task {
 			_ = isolation
+			// Task startup order is not guaranteed. Preserve submission order
+			// through the completion callback before starting the next request.
+			await precedingTask?.value
+			await beforeQueueSubmission?(requestID)
 			
 			let result = await withCheckedContinuation { continuation in
 				queue.async {
@@ -87,6 +99,7 @@ final class BackgroundProcessor<Value> {
 			
 			completion(result)
 		}
+		pendingTask = task
 	}
 
 	public func accessValue<T>(
