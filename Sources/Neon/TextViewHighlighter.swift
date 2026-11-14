@@ -67,6 +67,7 @@ public final class TextViewHighlighter {
 	private let client: TreeSitterClient
 	private let buffer = RangeInvalidationBuffer()
 	private let storageDelegate = TextStorageDelegate()
+	private var isActive = true
 
 #if os(iOS) || os(visionOS)
 	private var frameObservation: NSKeyValueObservation?
@@ -143,11 +144,25 @@ public final class TextViewHighlighter {
 
 	/// Perform manual invalidation on the underlying highlighter
 	public func invalidate(_ target: RangeTarget) {
+		guard isActive else { return }
 		buffer.invalidate(target)
+	}
+
+	/// Stop this instance before another highlighter takes ownership of the
+	/// same text view. In-flight token requests may finish, but cannot paint it.
+	public func deactivate() {
+		guard isActive else { return }
+		isActive = false
+		styler.deactivate()
+		NotificationCenter.default.removeObserver(self)
+#if os(iOS) || os(visionOS)
+		frameObservation = nil
+#endif
 	}
 
 	/// Inform the client that calls to languageConfiguration may change.
 	public func languageConfigurationChanged(for name: String) {
+		guard isActive else { return }
 		client.languageConfigurationChanged(for: name)
 	}
 }
@@ -157,6 +172,7 @@ extension TextViewHighlighter {
 	///
 	/// This method sets up all the necessary monitoring so the highlighter can react to scrolling. It should be called only once the view hierarchy is fully established.
 	public func observeEnclosingScrollView(expectingScrollView: Bool = true) {
+		guard isActive else { return }
 #if os(macOS) && !targetEnvironment(macCatalyst)
 		guard let scrollView = textView.enclosingScrollView else {
 			if expectingScrollView {
@@ -196,6 +212,7 @@ extension TextViewHighlighter {
 	}
 
 	@objc private func visibleContentChanged(_ notification: NSNotification) {
+		guard isActive else { return }
 		let visibleRange = textView.visibleTextRange
 
 		styler.validate(.range(visibleRange))

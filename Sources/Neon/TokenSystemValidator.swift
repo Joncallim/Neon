@@ -8,10 +8,15 @@ final class TokenSystemValidator<Interface: TextSystemInterface> {
 
 	private let textSystem: Interface
 	private let tokenProvider: TokenProvider
+	private var isActive = true
 
 	init(textSystem: Interface, tokenProvider: TokenProvider) {
 		self.textSystem = textSystem
 		self.tokenProvider = tokenProvider
+	}
+
+	func deactivate() {
+		isActive = false
 	}
 
 	var validationProvider: HybridSyncAsyncValueProvider<Validator.ContentRange, Validation, Never> {
@@ -26,7 +31,7 @@ final class TokenSystemValidator<Interface: TextSystemInterface> {
 	}
 
 	private func validate(_ range: Validator.ContentRange) -> Validation? {
-		guard range.version == currentVersion else { return .stale }
+		guard isActive, range.version == currentVersion else { return .stale }
 
 		guard let application = tokenProvider.sync(range.value) else {
 			return nil
@@ -34,7 +39,7 @@ final class TokenSystemValidator<Interface: TextSystemInterface> {
 
 		// A provider can suspend or synchronously reenter editing. Its result
 		// retains the request's version, not the current document's authority.
-		guard range.version == currentVersion else { return .stale }
+		guard isActive, range.version == currentVersion else { return .stale }
 
 		applyStyles(for: application)
 
@@ -42,14 +47,14 @@ final class TokenSystemValidator<Interface: TextSystemInterface> {
 	}
 
 	private func validate(_ range: Validator.ContentRange) async -> Validation {
-		guard range.version == currentVersion else { return .stale }
+		guard isActive, range.version == currentVersion else { return .stale }
 
 		// https://github.com/apple/swift/pull/71143
 		let application = await tokenProvider.async(isolation: MainActor.shared, range.value)
 
 		// A provider can suspend or synchronously reenter editing. Its result
 		// retains the request's version, not the current document's authority.
-		guard range.version == currentVersion else { return .stale }
+		guard isActive, range.version == currentVersion else { return .stale }
 
 		applyStyles(for: application)
 

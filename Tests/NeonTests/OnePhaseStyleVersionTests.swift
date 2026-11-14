@@ -10,6 +10,51 @@ import Testing
 @MainActor
 @Suite("One-phase style results retain content version ownership", .serialized)
 struct OnePhaseStyleVersionTests {
+    @Test(.timeLimit(.minutes(1)), arguments: [TokenApplication.Action.apply, .replace])
+    func retiringOwnerRejectsHeldStylesWithoutAContentEdit(action: TokenApplication.Action) async throws {
+        let system = OnePhaseTextSystem()
+        let gate = OnePhaseTokenGate()
+        let application = oldApplication(action)
+        let provider = TokenProvider(syncValue: { _ in nil }, mainActorAsyncValue: { _ in
+            await gate.suspend()
+            return application
+        })
+        let validator = TokenSystemValidator(textSystem: system, tokenProvider: provider)
+        let request = VersionedRange(NSRange(location: 0, length: 3), version: system.content.currentVersion)
+        let operation = Task { @MainActor in
+            await validator.validationProvider.async(isolation: MainActor.shared, request)
+        }
+        defer { gate.release() }
+        var started = gate.started.stream.makeAsyncIterator()
+        _ = try #require(await started.next())
+
+        // A theme/language switch can retire the highlighter without changing
+        // the document version. The old request must not clear the new paint.
+        validator.deactivate()
+        gate.release()
+        #expect(await operation.value == .stale)
+        #expect(system.applications.isEmpty)
+    }
+
+    @Test func retiredOwnerSkipsNewSynchronousAndAsynchronousRequests() async {
+        let system = OnePhaseTextSystem()
+        var calls = 0
+        let provider = TokenProvider(syncValue: { _ in
+            calls += 1
+            return .noChange
+        }, mainActorAsyncValue: { _ in
+            calls += 1
+            return .noChange
+        })
+        let validator = TokenSystemValidator(textSystem: system, tokenProvider: provider)
+        let request = VersionedRange(NSRange(location: 0, length: 3), version: system.content.currentVersion)
+        validator.deactivate()
+        #expect(validator.validationProvider.sync(request) == .stale)
+        #expect(await validator.validationProvider.async(isolation: MainActor.shared, request) == .stale)
+        #expect(calls == 0)
+        #expect(system.applications.isEmpty)
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: ["", "xyz", "longer replacement"],
           [TokenApplication.Action.apply, .replace])
     func changedContentRejectsAwaitedStyles(replacement: String, action: TokenApplication.Action) async throws {

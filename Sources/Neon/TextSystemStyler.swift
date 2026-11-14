@@ -14,7 +14,9 @@ import RangeState
 public final class TextSystemStyler<Interface: TextSystemInterface> {
 	private let textSystem: Interface
 	private let tokenProvider: TokenProvider
+	private let tokenValidator: TokenSystemValidator<Interface>
 	private let validator: SinglePhaseRangeValidator<Interface.Content>
+	private var isActive = true
 
 	public init(textSystem: Interface, tokenProvider: TokenProvider) {
 		self.textSystem = textSystem
@@ -24,6 +26,7 @@ public final class TextSystemStyler<Interface: TextSystemInterface> {
 			textSystem: textSystem,
 			tokenProvider: tokenProvider
 		)
+		self.tokenValidator = tokenValidator
 
 		self.validator = SinglePhaseRangeValidator(
 			configuration: .init(
@@ -48,14 +51,24 @@ public final class TextSystemStyler<Interface: TextSystemInterface> {
 	///     range = NSRange(1..<2)
 	///     delta = -1
 	public func didChangeContent(in range: NSRange, delta: Int) {
+		guard isActive else { return }
 		validator.contentChanged(in: range, delta: delta)
 	}
 
+	/// Retire this styler before replacing its owner. Results already awaiting
+	/// tokens must no longer clear or repaint the shared text view.
+	public func deactivate() {
+		isActive = false
+		tokenValidator.deactivate()
+	}
+
 	public func invalidate(_ target: RangeTarget) {
+		guard isActive else { return }
 		validator.invalidate(target)
 	}
 
 	public func validate(_ target: RangeTarget = .all) {
+		guard isActive else { return }
 		validator.validate(target)
 	}
 }
